@@ -7,6 +7,11 @@ on:
             - main
             - 'feature/*'
 
+env:
+    MONGO_URI: ${{ secrets.MONGO_URI }}
+    MONGO_USERNAME:  ${{ vars.MONGO_USERNAME }}
+    MONGO_PASSWORD:  ${{ secrets.MONGO_PASSWORD }}
+
 jobs:
     unit-testing:
         runs-on: ubuntu-latest
