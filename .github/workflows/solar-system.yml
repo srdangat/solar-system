@@ -19,9 +19,6 @@ jobs:
           matrix:
             nodejs_version: [18, 20]
             os: [ubuntu-latest]
-            exclude:
-              - nodejs_version: 18
-                os: macos-latest
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout Repository
@@ -68,7 +65,7 @@ jobs:
               uses: actions/cache@v6
               with:
                 path: node_modules
-                key: ${{ runner.os }}-node-modules-${{ hashFiles('package-json.lock') }}
+                key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
             - name: Install Dependencies
               run: npm install
@@ -124,3 +121,10 @@ jobs:
 
               echo "Verifying /live endpoint"
               wget -q -O - http://127.0.0.1:3000/live | grep live
+
+          - name: Docker Build and Push
+            uses: docker/build-push-action@v7
+            with:
+              context: .
+              push: true
+              tags: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
