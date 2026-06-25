@@ -21,7 +21,7 @@ jobs:
             ports:
               - 27017:27017
         env:
-          MONGO_URI: 'mongodb://localhost:27017/SuperData'
+          MONGO_URI: 'mongodb://localhost:27017/superData'
           MONGO_USERNAME:  ${{ vars.MONGO_USERNAME }}
           MONGO_PASSWORD:  ${{ secrets.MONGO_PASSWORD }}
         strategy:
@@ -68,7 +68,7 @@ jobs:
             options:
               --name mongo
         env:
-          MONGO_URI: 'mongodb://mongo:27017/SuperData'
+          MONGO_URI: 'mongodb://mongo:27017/superData'
           MONGO_USERNAME:  ${{ vars.MONGO_USERNAME }}
           MONGO_PASSWORD:  ${{ secrets.MONGO_PASSWORD }}
         runs-on: ubuntu-latest
