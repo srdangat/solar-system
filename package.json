@@ -1,5 +1,5 @@
 {
-  "name": "@srdangat/solar-system",
+   "name": "@srdangat/solar-system",
   "version": "6.7.6",
   "scripts": {
     "start": "node app.js",
