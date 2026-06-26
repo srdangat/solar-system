@@ -191,4 +191,4 @@ jobs:
              INGRESS_HOSTNAME: ${{ env.INGRESS_HOSTNAME }}
 
         - name: Verify replaced manifests
-          run: cat k8s/development/*.yaml
+          run: cat k8s/development/*.yml
