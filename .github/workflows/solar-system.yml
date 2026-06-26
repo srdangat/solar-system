@@ -183,7 +183,7 @@ jobs:
           with:
             tokenPrefix: '_{_'
             tokenSuffix: '_}_'
-            files: '["kubernetes/development/*"]'
+            files: '["k8s/development/*"]'
           env:
              NAMESPACE: ${{ vars.NAMESPACE }}
              REPLICAS: ${{ vars.REPLICAS }}
@@ -191,4 +191,4 @@ jobs:
              INGRESS_HOSTNAME: ${{ env.INGRESS_HOSTNAME }}
 
         - name: Verify replaced manifests
-          run: cat kubernetes/development/*.yaml
+          run: cat k8s/development/*.yaml
