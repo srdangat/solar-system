@@ -146,7 +146,7 @@ jobs:
     dev-deploy:
       needs: docker
       outputs:
-        APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+        APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_URL }}
       runs-on: ubuntu-latest
       steps:
         - name: Checkout Repository
@@ -210,10 +210,10 @@ jobs:
         - name: Set App Ingress Host URL
           id: set-ingress-host-address
           run: |
-            APP_INGRESS_HOST=$(kubectl get ingress -n ${{ vars.NAMESPACE }} \
+            APP_INGRESS_URL=$(kubectl get ingress -n ${{ vars.NAMESPACE }} \
             -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
 
-            echo "APP_INGRESS_HOST=$APP_INGRESS_HOST" >> $GITHUB_OUTPUT
+            echo "APP_INGRESS_URL=$APP_INGRESS_URL" >> $GITHUB_OUTPUT
 
     integration-testing:
       name: Dev Integration Testing
