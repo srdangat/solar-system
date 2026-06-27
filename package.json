@@ -1,5 +1,5 @@
 {
-  "name": "Solar System",
+   "name": "@srdangat/solar-system",
   "version": "6.7.6",
   "scripts": {
     "start": "node app.js",
@@ -15,6 +15,7 @@
     "express": "^4.18.2",
     "mocha-junit-reporter": "^2.2.1",
     "mongoose": "5.13.20",
+    "nodemon": "^3.1.14",
     "nyc": "^15.1.0"
   },
   "devDependencies": {
