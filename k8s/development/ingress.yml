@@ -1,18 +1,42 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: solar-system
+  name: solar-system-ingress
   namespace: _{_NAMESPACE_}_
+  annotations:
+    kubernetes.io/ingress.class: alb
+
+    # Share the same ALB across environments
+    alb.ingress.kubernetes.io/group.name: solar-system
+
+    # ALB Configuration
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTP & HTTPS Listeners
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+
+    # ACM Certificate
+    alb.ingress.kubernetes.io/certificate-arn: _{_ACM_CERTIFICATE_ARN_}_
+
+    # Redirect HTTP -> HTTPS
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # Health Check
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200-399"
+
 spec:
-  ingressClassName: nginx
+  ingressClassName: alb
+
   rules:
-  - host: _{_INGRESS_HOSTNAME_}_
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: solar-system
-            port:
-              number: 3000
+    - host: _{_INGRESS_HOST_}_
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: solar-system
+                port:
+                  number: 3000
