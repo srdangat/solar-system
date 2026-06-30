@@ -146,132 +146,13 @@ jobs:
     dev-deploy:
         if: contains(github.ref, 'feature/')
         needs: docker
-        environment:
-          name: development
-          url: https://${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        outputs:
-          APP_INGRESS_URL: ${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v7
-
-            - name: Configure AWS (OIDC)
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-                aws-region: ${{ vars.AWS_REGION }}
-
-            - name: Install Kubectl CLI
-              uses: azure/setup-kubectl@v4
-              with:
-                version: v1.36.0
-
-            - name: Configure kubeconfig
-              run: |
-                aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name solar-system
-
-
-            - name: Verify Cluster Connection
-              run: | 
-                kubectl version 
-                echo "------------------------------------------" 
-                kubectl get nodes 
-                echo "------------------------------------------"
-                kubectl get namespaces
-
-            - name: Set Ingress Host
-              run: |
-                echo "INGRESS_HOST=solar-system-${{ vars.NAMESPACE }}.cloud2devops.online" >> $GITHUB_ENV
-
-            - name: Replace Tokens in Manifests
-              uses: cschleiden/replace-tokens@v1
-              with:
-                tokenPrefix: '_{_'
-                tokenSuffix: '_}_'
-                files: '["k8s/development/*"]'
-              env:
-                NAMESPACE: ${{ vars.NAMESPACE }}
-                REPLICAS: ${{ vars.REPLICAS }}
-                IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
-                INGRESS_HOST: ${{ env.INGRESS_HOST }}
-                ACM_CERTIFICATE_ARN: ${{ vars.ACM_CERTIFICATE_ARN }}
-
-
-            - name: Verify replaced manifests
-              run: cat k8s/development/*.yml
-
-            - name: Create MongoDB Secret
-              run: |
-                kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
-                --from-literal=MONGO_URI="${{ secrets.MONGO_URI }}" \
-                --from-literal=MONGO_USERNAME="${{ vars.MONGO_USERNAME }}" \
-                --from-literal=MONGO_PASSWORD="${{ secrets.MONGO_PASSWORD }}" \
-                --dry-run=client -o yaml | kubectl apply -f -
-
-            - name: Deploy to Dev
-              run: |
-                kubectl apply -f k8s/development
-
-            - name: Wait for ALB Hostname
-              run: |
-                for i in {1..40}; do
-                  ALB_HOSTNAME=$(kubectl get ingress -n ${{ vars.NAMESPACE }} \
-                    -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
-
-                  if [ -n "$ALB_HOSTNAME" ]; then
-                    echo "ALB_HOSTNAME=$ALB_HOSTNAME" >> $GITHUB_ENV
-                    echo "Found ALB: $ALB_HOSTNAME"
-                    exit 0
-                  fi
-
-                  echo "Waiting for ALB..."
-                  sleep 10
-                done
-
-                echo "ALB not created in time" && exit 1
-
-            - name: Get ALB Hosted Zone ID
-              run: |
-                ALB_ARN=$(aws elbv2 describe-load-balancers \
-                  --query "LoadBalancers[?DNSName=='$ALB_HOSTNAME'].LoadBalancerArn" \
-                  --output text)
-
-                ALB_ZONE_ID=$(aws elbv2 describe-load-balancers \
-                  --load-balancer-arns "$ALB_ARN" \
-                  --query "LoadBalancers[0].CanonicalHostedZoneId" \
-                  --output text)
-
-                echo "ALB_ZONE_ID=$ALB_ZONE_ID" >> $GITHUB_ENV
-
-            - name: Create/Update Route53 Alias Record
-              run: |
-                cat > route53.json <<EOF
-                {
-                  "Comment": "UPSERT ALB Alias DEV",
-                  "Changes": [{
-                    "Action": "UPSERT",
-                    "ResourceRecordSet": {
-                      "Name": "${{ env.INGRESS_HOST }}",
-                      "Type": "A",
-                      "AliasTarget": {
-                        "HostedZoneId": "${ALB_ZONE_ID}",
-                        "DNSName": "${ALB_HOSTNAME}",
-                        "EvaluateTargetHealth": false
-                      }
-                    }
-                  }]
-                }
-                EOF
-
-                aws route53 change-resource-record-sets \
-                  --hosted-zone-id ${{ vars.ROUTE53_HOSTED_ZONE_ID }} \
-                  --change-batch file://route53.json
-
-            - name: Set App Ingress Host
-              id: set-ingress-host
-              run: |
-                echo "APP_INGRESS_URL=${INGRESS_HOST}" >> $GITHUB_OUTPUT
+        uses: ./.github/workflows/reuse-deployment.yml
+        with:
+          environment: development
+        secrets:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
     dev-integration-testing:
         if: contains(github.ref, 'feature/')
@@ -281,7 +162,7 @@ jobs:
         steps:
             - name: Test Dev Endpoint
               env:
-                URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
+                URL: ${{ needs.dev-deploy.outputs.APP_URL }}
               run: |
                 echo "Testing: https://$URL/live"
                 for i in {1..60}; do
@@ -296,112 +177,13 @@ jobs:
     prod-deploy:
         if: github.ref == 'refs/heads/main'
         needs: docker
-        environment:
-          name: production
-          url: https://${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        outputs:
-          APP_INGRESS_URL: ${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        runs-on: ubuntu-latest
-
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v7
-
-            - name: Configure AWS (OIDC)
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-                aws-region: ${{ vars.AWS_REGION }}
-
-            - name: Install Kubectl CLI
-              uses: azure/setup-kubectl@v4
-              with:
-                version: v1.36.0
-
-            - name: Configure kubeconfig
-              run: |
-                aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name solar-system
-
-            - name: Set Ingress Host
-              run: |
-                echo "INGRESS_HOST=solar-system-${{ vars.NAMESPACE }}.cloud2devops.online" >> $GITHUB_ENV
-
-            - name: Replace Tokens in Manifests
-              uses: cschleiden/replace-tokens@v1
-              with:
-                tokenPrefix: '_{_'
-                tokenSuffix: '_}_'
-                files: '["k8s/production/*"]'
-              env:
-                NAMESPACE: ${{ vars.NAMESPACE }}
-                REPLICAS: ${{ vars.REPLICAS }}
-                IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
-                INGRESS_HOST: ${{ env.INGRESS_HOST }}
-                ACM_CERTIFICATE_ARN: ${{ vars.ACM_CERTIFICATE_ARN }}
-
-            - name: Deploy to Production
-              run: |
-                kubectl apply -f k8s/production
-
-            - name: Wait for ALB Hostname
-              run: |
-                for i in {1..40}; do
-                  ALB_HOSTNAME=$(kubectl get ingress -n ${{ vars.NAMESPACE }} \
-                    -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
-
-                  if [ -n "$ALB_HOSTNAME" ]; then
-                    echo "ALB_HOSTNAME=$ALB_HOSTNAME" >> $GITHUB_ENV
-                    echo "Found ALB: $ALB_HOSTNAME"
-                    exit 0
-                  fi
-
-                  echo "Waiting for ALB..."
-                  sleep 10
-                done
-
-                echo "ALB not created in time" && exit 1
-
-            - name: Get ALB Hosted Zone ID
-              run: |
-                ALB_ARN=$(aws elbv2 describe-load-balancers \
-                  --query "LoadBalancers[?DNSName=='$ALB_HOSTNAME'].LoadBalancerArn" \
-                  --output text)
-
-                ALB_ZONE_ID=$(aws elbv2 describe-load-balancers \
-                  --load-balancer-arns "$ALB_ARN" \
-                  --query "LoadBalancers[0].CanonicalHostedZoneId" \
-                  --output text)
-
-                echo "ALB_ZONE_ID=$ALB_ZONE_ID" >> $GITHUB_ENV
-
-            - name: Create/Update Route53 Alias Record
-              run: |
-                cat > route53.json <<EOF
-                {
-                  "Comment": "UPSERT ALB Alias PROD",
-                  "Changes": [{
-                    "Action": "UPSERT",
-                    "ResourceRecordSet": {
-                      "Name": "${{ env.INGRESS_HOST }}",
-                      "Type": "A",
-                      "AliasTarget": {
-                        "HostedZoneId": "${ALB_ZONE_ID}",
-                        "DNSName": "${ALB_HOSTNAME}",
-                        "EvaluateTargetHealth": false
-                      }
-                    }
-                  }]
-                }
-                EOF
-
-                aws route53 change-resource-record-sets \
-                  --hosted-zone-id ${{ vars.ROUTE53_HOSTED_ZONE_ID }} \
-                  --change-batch file://route53.json
-
-            - name: Set App Ingress Host
-              id: set-ingress-host
-              run: |
-                echo "APP_INGRESS_URL=${INGRESS_HOST}" >> $GITHUB_OUTPUT
+        uses: ./.github/workflows/reuse-deployment.yml
+        with:
+          environment: production
+        secrets:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
     prod-integration-testing:
         if: github.ref == 'refs/heads/main'
@@ -411,7 +193,7 @@ jobs:
         steps:
             - name: Test Production Endpoint
               env:
-                URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}
+                URL: ${{ needs.prod-deploy.outputs.APP_URL }}
               run: |
                 echo "Testing: https://$URL/live"
                 for i in {1..60}; do
