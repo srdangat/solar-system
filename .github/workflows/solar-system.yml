@@ -239,3 +239,26 @@ jobs:
                 done
                 echo "Production integration test failed"
                 exit 1
+
+    slack-notification:
+       if: always()
+       name: Slack Notification
+       needs: [dev-integration-testing, prod-integration-testing]
+       continue-on-error: true
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - name: Slack Notification
+           uses: rtCamp/action-slack-notify@v2
+           env:
+             SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+             SLACK_CHANNEL: github-action
+             SLACK_COLOR: ${{ job.status }}
+             SLACK_TITLE: "Solar System CI/CD"
+             SLACK_MESSAGE: |
+               Workflow: ${{ github.workflow }}
+               Branch: ${{ github.ref_name }}
+               Commit: ${{ github.sha }}
+               Status: ${{ job.status }}
+               Triggered by: ${{ github.actor }}
+             SLACK_USERNAME: GitHub Actions
